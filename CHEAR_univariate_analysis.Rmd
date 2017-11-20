@@ -1,0 +1,114 @@
+---
+title: "Univariate Analysis - Inflammation vs. No Inflammation in NAFLD"
+author: "Catherine Cioffi"
+date: "November 20, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## UNIVARIATE ANALYSIS IN R-PACKAGE xms PANDA:
+
+The following R-code reads in the feature table and the class label file, and designates the output location. The class label file tells the program which sample is NAFLD with inflammation versus without inflammation, and includes the covariates to be adjusted for (Age and sex). 
+
+Then, the code calls xmsPANDA and runs code for univariate analysis by linear regression (featselmethod="lmreg") adjusting for the aforementioned covariates. The metabolomics data being run is the HILIC positive data. Upon completion of the code, we have asked R to print the p-value for each m/z  in the "best set of discriminatory metabolites".
+
+```{r}
+library(xmsPANDA)
+
+#read in files for inflammation comparison;
+feature_table_file<-"/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_Panel/xmspanda_HILIC/featuretable.txt"
+class_labels_file<-"/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_panel/xmspanda_HILIC/classlabels_inflam.txt"
+outloc_univariate<-"/Users/cecioff/Desktop"
+
+#linear regrssion;adjust for age and sex; no RSD filtering; 50% per group missing.
+#NO FDR FILTERING YET - adjust later if needed;
+results_univariate <- diffexp(Xmat = NA, Ymat = NA, feature_table_file=feature_table_file,
+        parentoutput_dir=outloc_univariate, class_labels_file=class_labels_file, 
+        num_replicates = 1, feat.filt.thresh = NA,
+        summarize.replicates = FALSE, summary.method = "mean", 
+        summary.na.replacement = "halfdatamin", missing.val = 0,
+        rep.max.missing.thresh = 0.5, all.missing.thresh = 0.1,
+        group.missing.thresh = 0.5, input.intensity.scale = "raw",
+        log2transform = TRUE, medcenter = FALSE,
+        znormtransform = FALSE, quantile_norm = TRUE,
+        lowess_norm = FALSE, madscaling = FALSE,
+        rsd.filt.list = FALSE, pairedanalysis = FALSE,
+        featselmethod = "lmreg", fdrthresh = 0.30, fdrmethod = "BH",
+        cor.method = "spearman", networktype = "complete",
+        abs.cor.thresh = 0.4, cor.fdrthresh = 0.30, kfold = 5,
+        pred.eval.method = "AUC", feat_weight = 1, globalcor = FALSE,
+        target.metab.file = NA, target.mzmatch.diff = 10,
+        target.rtmatch.diff = NA, max.cor.num = 100, samplermindex = NA,
+        pcacenter = FALSE, pcascale = FALSE, numtrees = 20000,
+        analysismode = "classification", net_node_colors = c("green", "red"),
+        net_legend = TRUE, svm_kernel = "radial", heatmap.col.opt = "RdBu", 
+        sample.col.opt = "rainbow", alphacol = 0.3, rf_selmethod = "rawVIMsig",
+        pls_vip_thresh = 1, num_nodes = 2, max_varsel = 100, pls_ncomp = 5,
+        pca.stage2.eval = TRUE, scoreplot_legend = TRUE, pca.global.eval = TRUE,
+        rocfeatlist = seq(2,6,2), rocfeatincrement = TRUE, rocclassifier = "svm",
+        foldchangethresh = 2, wgcnarsdthresh = 20, WGCNAmodules = TRUE,
+        optselect = TRUE, max_comp_sel = 1, saveRda = TRUE,
+        legendlocation = "topleft", degree_rank_method = "overall",
+        pca.cex.val = 4, pca.ellipse = FALSE, ellipse.conf.level = 0.95,
+        pls.permut.count = 100, svm.acc.tolerance = 5)
+
+results_univariate$diffexp_metabs
+
+```
+
+#MANHATTAN PLOT - METABOLOMICS DATA:
+
+First we will generate two manhattan plots: 1) Type 1 shows m/z on the x-axis and provides an overview of the range of molecular masses; 2) Type 2 shows retention time on the x-axis and provides an overview of the range of chemical structures. The input for this code is a feature table with the m/z, time, -log(p-value) and fold change estimate for each feature.
+
+```{r}
+library(readr)
+#read in manhattan plot specific dataset:
+MP_input <- read_delim("C:/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_panel/xmspanda_HILIC/manhattan/MP_input_inflam.txt", 
+                       "\t", escape_double = FALSE, trim_ws = TRUE)
+
+#TYPE 1 MANHATTAN PLOT;
+plot1 <- get_manhattanplots(xvec=MP_input$mz, yvec=MP_input$logp, 
+                            up_or_down=MP_input$FC, 
+                            maintext = "Type 1 Manhattan Plot", ythresh = 1.3,
+                            ylab="-log10(p-values)", xlab="m/z", 
+                            colorvec = c("darkgreen", "firebrick1"), 
+                            col_seq = c("brown", "chocolate3", "orange3", "coral", "pink", "skyblue","blue", "darkblue", "purple", "violet"), 
+                            xincrement = 150, yincrement = 1) 
+
+#TYPE 2 MANHATTAN PLOT;
+plot2 <- get_manhattanplots(xvec=MP_input$time, yvec=MP_input$logp, 
+                            up_or_down=MP_input$FC,
+                            maintext = "Type 2 Manhattan Plot", ythresh = 1.3,
+                            ylab="-log10(p-values)", xlab="retention time", 
+                            colorvec = c("darkgreen", "firebrick1"), 
+                            col_seq = c("brown", "chocolate3", "orange3", "coral", "pink", "skyblue", "blue", "darkblue", "purple", "violet"), 
+                            xincrement = 20, yincrement = 1)
+
+```
+
+
+
+##Two-way Heirarchical Cluster Analysis -  Metabolomics Data:
+
+Next, we will generate a two-way heirarchical cluster analysis heat map. The feature table that you input for this step must will determine the number of samples/features in the output. In the code below, we have created a separate feature table containing only the features that differ between groups at p-value < 0.1. 
+
+```{r}
+#read in HCA specific feature table:
+feature_table_HCA<-"/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_Panel/xmspanda_HILIC/featuretable_HCA_inflam_VIP2.txt"
+
+#designate output location:
+outloc_HCA<-"/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_Panel/xmspanda_HILIC/HCA"
+
+#heirarchical cluster analysis - user input parameters;
+HCA_p0_01 <- get_hca(feature_table_file=feature_table_HCA, parentoutput_dir=outloc_HCA,
+               class_labels_file=class_labels_file, 
+               heatmap.col.opt = "RdBu", cor.method = "spearman",
+               is.data.znorm = FALSE, analysismode = "classification", 
+               sample.col.opt = "rainbow", plots.width = 2000,
+               plots.height = 2000, plots.res = 300, alphacol = 0.3,hca_type="two-way")
+
+
+```
