@@ -1,0 +1,113 @@
+---
+title: "CHEAR Metabolomics Dataset - Phenotype Information"
+author: "Catherine Cioffi"
+date: "November 22, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(knitr)
+library(kableExtra)
+library(adm)
+library(readxl)
+```
+
+## Introduction:
+
+In this document, we will read in the CHEAR Phenotype Information Dataset. We will also perform data cleaning, reformatting, and re-coding of variables as needed.
+
+First, we will read in the dataset, and create a box from which we can view it.
+
+```{r, echo=TRUE}
+
+data <- read.csv("C:/Users/cecioff/Desktop/CHEAR_phenotype_data_clean.csv", header=TRUE, na.strings=c("", "NA"), sep=",")
+
+data %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width=F, 
+                position="left", font_size=10) %>%
+  scroll_box(width = "750px", height = "750px")
+
+```
+
+## Clean, re-format, re-code new variables:
+
+In the followign code we will:
+
+
+1. Remove subjects who do not have data for NAFLD classification (variable NAFLD_01).
+
+
+2. create a new variable to identify subjects with type 2 diabetes (T2DM), impaired glucose tolerance (IGT), or impaired fasting glucose (IFG), based on classification of fasting glucose and/or 2-hr post-prandial glucose using ADA criteria. (Note: for subjects who did not have an oral glucose tolerance test, we cannot code them for IGT)
+
+
+3. create a new variable to identify subjects with NASH (yes/no), portal or lobular inflammation (yes/no), and elevated NAS score (less than 3 or greater than or equal to 3)
+
+
+```{r, echo=TRUE, results=FALSE}
+#Step 1:
+as.factor(data$NAFLD_01)
+data_final <- subset(data, NAFLD_01 == 0 | NAFLD_01 ==1)
+
+#Step 2 - Create diabetes and pre-diabetes categorical variables:
+data_final$T2DM <- NA
+data_final$IFG <- NA
+data_final$IGT <- NA
+
+ifelse((data_final$glu0 >= 126 | data_final$glu120 >= 200), data_final$T2DM <- 1, data_final$T2DM <- 0)
+ifelse((data_final$glu0 < 126 & data_final$glu0 >= 100), data_final$IFG <- 1, data_final$IFG <- 0)
+ifelse((data_final$glu120 >=140 & data_final$glu120 < 200), data_final$IGT <- 1, data_final$IGT <- 0)
+
+#Step 3 - Create NASH, inflammation, and NAS categorical variables:
+data_final$NASH_01 <- NA
+data_final$Inflam_01 <- NA
+data_final$NAS_01 <- NA
+
+#NASH yes/no:
+data_final$NASH_criteria_yn <- as.factor(data_final$NASH_criteria_yn)
+summary(data_final$NASH_criteria_yn)
+data_final$NASH_01 <- ifelse((data_final$NASH_criteria_yn == "1" | data_final$NASH_criteria_yn == "c" | 
+                                data_final$NASH_criteria_yn == "d" | data_final$NASH_criteria_yn == "e"), 
+                             data_final$NASH_01 <- 1, data_final$NASH_01 <- 0)
+summary(as.factor(data_final$NASH_01))
+
+#Inflammation yes/no:
+data_final$portal_inflammation <- as.factor(data_final$portal_inflammation)
+summary(data_final$portal_inflammation)
+data_final$lobular_inflammation <- as.factor(data_final$lobular_inflammation)
+summary(data_final$lobular_inflammation)
+data_final$Inflam_01 <- ifelse((data_final$portal_inflammation == "mild-mod" | 
+                                  data_final$portal_inflammation == "mod" | data_final$lobular_inflammation == "1" |  
+                                  data_final$lobular_inflammation == "2" |  data_final$lobular_inflammation == "3"), 
+                               data_final$Inflam_01 <- 1, data_final$Inflam_01 <- 0)
+summary(as.factor(data_final$Inflam_01))   
+
+#NAS < 3 vs. >= 3:
+summary(data_final$NAS_score)
+data_final$NAS_01 <- ifelse((data_final$NAS_score == 3 | data_final$NAS_score == 4 | data_final$NAS_score == 5 |
+                               data_final$NAS_score == 6 | data_final$NAS_score == 7), 
+                            data_final$NAS_01 <- 1, data_final$NAS_01 <- 0)
+summary(as.factor(data_final$NAS_01))
+
+```
+
+## Print final, cleaned dataset:
+
+Below we will print a selected set of variables from the new, cleaned dataset. We will also write this dataset to our working directory for future statistical analyses.
+
+```{r, echo=TRUE}
+data_final_stripped <- data_final[, c("CHEAR_ID", "NAFLD_01", "NASH_01", "Inflam_01", "NAS_01", "T2DM", "IGT", "IFG", 'age', 'sex', 'race', 'BMI', 'BMIZ', 'BMIPCT', 'ALT', 'AST', 'Triglyc', 'HDL', 'LDL', 'Total_chol', 'fibrosis_stage', 'lobular_inflammation', 'portal_inflammation', 'ballooning', 'NAS_score')]
+
+options(knitr.table.format = "html") 
+
+data_final_stripped %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width=F, 
+                position="left", font_size=10) %>%
+  scroll_box(width = "750px", height = "750px")
+
+write.csv(data_final, file = "phenotype_data.csv")
+
+```

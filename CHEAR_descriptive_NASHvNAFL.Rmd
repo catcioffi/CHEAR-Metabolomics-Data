@@ -11,40 +11,588 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Introduction:
 
-The goal of this analysis was to describe the metabolomic pathways associated with NAFLD disease progression. The following will generate descriptive Tables 1a and 1b of the characteristics of the comparison groups for this analysis. The first comparison was based on presence of lobular or portal inflammation, versus no inflammation. The second comparison was based on a NAFLD Activity SCore (NAS) greater than or equal to 3, versus less than 3.
+The goal of this analysis was to describe the metabolomic pathways associated with NAFLD disease progression. The following will generate descriptive Tables 1a-1c of the characteristics of the comparison groups for this analysis. The first comparison is based on fulfilling NASH criteria (yes/no). The second is based on presence of lobular or portal inflammation, versus no inflammation. The third comparison is based on a NAFLD Activity SCore (NAS) less than 3, versus greater than or equal to 3.
 
 First we will read in the phenotype table from computer hard-drive:
 
 ```{r}
+library(knitr)
+library(kableExtra)
+library(adm)
 library(readxl)
-data <- read.csv("C:/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_panel/phenotype_data.csv", header=TRUE, sep=",")
+
+#Option 1 - read in CSV from desktop. I will commment this out for now.
+#data <- read.csv("C:/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_panel/phenotype_data.csv", header=TRUE, sep=",")
+
+#Option 2 - read in dataset from working directory:
+data <- read.csv("phenotype_data.csv", header=TRUE, na.strings=c("", "NA"), sep=",")
+
+```
+
+##SELECT VARIABLES & VIEW THE DATASET:
+
+Below we will select the variables of interest from the phenotype dataset and display.
+
+```{r}
+#first select subjects we want, i.e. those with liver biopsy data and NAFLD:
+data <- subset(data, (NAFLD_01 == 1 & is.na(NASH_criteria_yn) == FALSE & NASH_criteria_yn != "a"))
+
+data_stripped <- data[, c("CHEAR_ID", "NAFLD_01", "NASH_01", "Inflam_01", "NAS_01", "T2DM", "IGT", "IFG", 'age', 'sex', 'race', 'BMI', 'BMIZ', 'BMIPCT', 'ALT', 'AST', 'Triglyc', 'HDL', 'LDL', 'Total_chol', 'fibrosis_stage', 'lobular_inflammation', 'portal_inflammation', 'ballooning', 'NAS_score')]
+
+options(knitr.table.format = "html") 
+
+data_stripped %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width=F, 
+                position="left", font_size=10) %>%
+  row_spec(0, angle=-45) %>%
+  scroll_box(width = "750px", height = "750px")
+
 ```
 
 ## Descriptive Statistics, part 1:
 
-First we will generate descriptive statistics for the groups of children being compared in the analysis of inflammation vs. no inflammation in NAFLD. 
+First we will generate descriptive statistics for the groups of children being compared in the analysis of NASH vs. non-NASH in NAFLD. This is a simple way of doing this using R-package table one.
 
-```{r, echo=FALSE}
+```{r}
 library(tableone)
 listVars <- c("age", "sex", "race", "BMI", "ALT", "AST", "fibrosis_stage", 
               "lobular_inflammation", "portal_inflammation", "ballooning", "NAS_score")
 catVars <- c("sex","race", "fibrosis_stage", "lobular_inflammation",
               "portal_inflammation", "ballooning", "NAS_score")
-table1 <- CreateTableOne(vars = listVars, data = data, factorVars = catVars, 
-                         strata=c("NASH_01_inflam"))
+table1 <- CreateTableOne(vars = listVars, data = data_stripped, factorVars = catVars, 
+                         strata=c("NASH_01"))
 table1
+```
+
+## Table 1a:
+
+We will take the information from above and input into formatted "Table 1".
+
+```{r, results= "asis" }
+
+# get n1 and n0;
+data[,'NASH_01'] <- as.factor(data$NASH_01)
+n <- summary(data$NASH_01)
+n0str <- paste0("n=", n["0"])
+n1str <- paste0("n=", n["1"])
+
+# create the header
+# note that &___; are called HTML entities and allow you produce special characters
+header <- list()
+HEADERATTR <- list(NULL, list(colspan = 2), NULL, list(colspan = 2), NULL, NULL)
+header <- c(header, 
+            html(
+              html(
+                # &nbsp; are non-breaking spaces for some padding
+                # in the empty column
+                c("", "NASH=yes", "&nbsp;&nbsp;&nbsp;", 
+                  "NASH=no", "", ""), 
+                "th", 
+                HEADERATTR
+              ), 
+              "tr")
+)
+
+HEADERATTR2 <- mapply(c, 
+                      HEADERATTR, 
+                      list(NULL, list(style = "border-bottom: black solid"), NULL, 
+                           list(style = "border-bottom: black solid"), NULL, NULL
+                      )
+)
+
+header <- c(header, 
+            html(
+              html(
+                c("", n1str, "", n0str, "", ""), 
+                "th", 
+                HEADERATTR2), 
+              "tr")
+)
+header <- c(header, 
+            html(
+              html(
+                c("Variable", "n", "%", "", "n", "%", 
+                  "&chi;<sup>2</sup>", "p &dagger;"), 
+                "th", 
+                list(list(style = "border-bottom: black solid"))), 
+              "tr")
+)
+header <- paste(header, collapse = "")
+
+# make some derived variables
+data$age.le12<- factor(ifelse(data$age <= 12, 1, 0))
+data$age.13.15<- factor(ifelse(((data$age >= 13) & (data$age <= 15)), 1, 0))
+data$age.ge16<- factor(ifelse(data$age >= 16, 1, 0))
+
+data$sex.male<- factor(ifelse(data$sex == 1,1,0))
+data$sex.female<- factor(ifelse(data$sex == 2,1,0))
+
+data$White <- factor(ifelse(data$race == 2,1,0))
+data$Black<- factor(ifelse(data$race == 1,1,0))
+data$Hispanic <- factor(ifelse(data$race == 3,1,0))
+data$Other<- factor(ifelse(data$race >= 4,1,0))
+
+data$fibrosis.yes <-factor(ifelse(data$fibrosis_stage != 0, 1,0))
+data$lobular.yes <-factor(ifelse(data$lobular_inflammation != 0, 1,0))
+data$portal.yes <-factor(ifelse(data$portal_inflammation != 0, 1,0))
+data$ballooning.yes <-factor(ifelse(data$ballooning == 1,1,0))
+
+data$NAS_score <- as.numeric(data$NAS_score)
+data$NAS.12 <-factor(ifelse(data$NAS_score < 3, 1,0))
+data$NAS.34 <-factor(ifelse((data$NAS_score>=3 & data$NAS_score<5), 1,0))
+data$NAS.ge5 <-factor(ifelse(data$NAS_score >= 5, 1,0))
+
+row.names <- c(
+  "Age",
+  "&nbsp;-&nbsp; &le;12 yrs", 
+  "&nbsp;-&nbsp; 13-15 yrs",
+  "&nbsp;-&nbsp; &ge;16 yrs",
+  "Male",
+  "Female",
+  "Race", 
+  "&nbsp;-&nbsp; Black", 
+  "&nbsp;-&nbsp; White",
+  "&nbsp;-&nbsp; Hispanic",
+  "&nbsp;-&nbsp; Other", 
+  "Fibrosis, yes/no", 
+  "Lobular Inflam, yes/no",
+  "Portal inflam, yes/no",
+  "Ballooning, yes/no",
+  "NAS_score",
+  "&nbsp;-&nbsp; 1-2", 
+  "&nbsp;-&nbsp; 3-4",
+  "&nbsp;-&nbsp; &ge;5"
+)
+  
+# build a function to output each row
+row.builder <- function(varname) {
+  if(varname == "NULL") return(rep("", 7))
+  tab <- table(data[, varname], data$NASH_01)
+  props <- sprintf("%.1f", prop.table(tab, 2)[2, ]*100)
+  stats <- summary(tab)
+  # automatically determine if Fisher test is appropriate
+  if(stats$approx.ok) {
+    chisq <- sprintf("%.2f", stats$statistic)
+    pval <- stats$p.value
+    twotail <- ""
+  } else {
+    chisq <- "&Dagger;"
+    pval <- fisher.test(tab)$p.value
+    twotail <- "&sect;"
+  }
+  star <- ifelse(pval<0.05, "*", "")
+  pval <- ifelse(pval<0.001, "&lt;0.001", 
+                 ifelse(pval<0.01, sprintf("%.3f", stats$p.value), 
+                        sprintf("%.2f", stats$p.value)))
+  pval <- paste(pval, star, twotail, sep = "")
+  c(tab[2, 2], props[2], "", tab[2, 1], props[1], chisq, pval)
+}
+
+vars <- c("NULL", "age.le12", "age.13.15", "age.ge16", "sex.male", "sex.female", "NULL", 
+          "Black", "White", "Hispanic", "Other", "fibrosis.yes", "lobular.yes", "portal.yes", 
+          "ballooning.yes", "NULL", "NAS.12", "NAS.34", "NAS.ge5")
+
+body <- do.call(rbind, lapply(vars, row.builder))
+
+# all but last row
+row.names1 <- sapply(row.names[-length(row.names)], 
+                     function(x) html(x, "td", list(list(style="font: bold"))))
+body1 <- apply(body[-nrow(body), ], 1, 
+               function(x) html(x, "td", list(list(style = "text-align: center"))))
+
+# last row special formatting
+row.names2 <- html(row.names[length(row.names)], "td", 
+                   list(list(style = "font: bold; border-bottom: black solid")))
+body2 <- html(body[nrow(body), ], "td", 
+              list(list(style = "text-align: center; border-bottom: black solid")))
+
+# recombine:
+row.names <- c(row.names1, row.names2)
+body <- c(body1, body2)
+body <- html(paste(row.names, body), "tr")
+all <- paste(header, body, sep = "")
+
+# title:
+cat(html("<b>Table 1.</b> Demographic, clinical, and histological charactericteristics of children with NAFLD with or without NASH", "p"), 
+    file = "table1.html")
+
+# table output
+table <- html(all, "table", list(list(style = "border-collapse:collapse")))
+cat(table, file = "table1.html", append = TRUE)
+
+# footnotes
+footnotes <- c(
+  "&dagger; &alpha;=0.05. Significant p-values are marked with an asterisk (*).<br/>", 
+  "&Dagger; Fisher's Exact Test<br/>", 
+  "&sect; Two-tailed p-value<br/>")
+cat(html(footnotes, "small"), file = "table1.html", append = TRUE)
+
+# file was written above but we'll read it back in and display here
+cat(readLines("table1.html"))
+
 ```
 
 ## Descriptive Statistics, part 2:
 
-Second we will generate descriptive statistics for the groups of children being compared in the analysis of NAS score < 3 versus 3 or greater among children with NAFLD. 
+First we will generate descriptive statistics for the groups of children being compared in the analysis of inflammation vs. no inflammation in NAFLD. This is a simple way of doing this using R-package table one.
 
-```{r, echo=FALSE}
+```{r}
+library(tableone)
+listVars <- c("age", "sex", "race", "BMI", "ALT", "AST", "fibrosis_stage", 
+              "lobular_inflammation", "portal_inflammation", "ballooning", "NAS_score")
+catVars <- c("sex","race", "fibrosis_stage", "lobular_inflammation",
+              "portal_inflammation", "ballooning", "NAS_score")
+table1 <- CreateTableOne(vars = listVars, data = data_stripped, factorVars = catVars, 
+                         strata=c("Inflam_01"))
+table1
+```
+
+## Table 1b:
+
+We will take the information from above and input into formatted "Table 1b".
+
+```{r, results= "asis" }
+
+# get n1 and n0;
+data[,'NASH_inflam'] <- as.factor(data$Inflam_01)
+n <- summary(data$NASH_inflam)
+n0str <- paste0("n=", n["0"])
+n1str <- paste0("n=", n["1"])
+
+# create the header
+# note that &___; are called HTML entities and allow you produce special characters
+header <- list()
+HEADERATTR <- list(NULL, list(colspan = 2), NULL, list(colspan = 2), NULL, NULL)
+header <- c(header, 
+            html(
+              html(
+                # &nbsp; are non-breaking spaces for some padding
+                # in the empty column
+                c("", "Inflammation", "&nbsp;&nbsp;&nbsp;", 
+                  "No Inflammation", "", ""), 
+                "th", 
+                HEADERATTR
+              ), 
+              "tr")
+)
+
+HEADERATTR2 <- mapply(c, 
+                      HEADERATTR, 
+                      list(NULL, list(style = "border-bottom: black solid"), NULL, 
+                           list(style = "border-bottom: black solid"), NULL, NULL
+                      )
+)
+
+header <- c(header, 
+            html(
+              html(
+                c("", n1str, "", n0str, "", ""), 
+                "th", 
+                HEADERATTR2), 
+              "tr")
+)
+header <- c(header, 
+            html(
+              html(
+                c("Variable", "n", "%", "", "n", "%", 
+                  "&chi;<sup>2</sup>", "p &dagger;"), 
+                "th", 
+                list(list(style = "border-bottom: black solid"))), 
+              "tr")
+)
+header <- paste(header, collapse = "")
+
+# make some derived variables
+data$age.le12<- factor(ifelse(data$age <= 12, 1, 0))
+data$age.13.15<- factor(ifelse(((data$age >= 13) & (data$age <= 15)), 1, 0))
+data$age.ge16<- factor(ifelse(data$age >= 16, 1, 0))
+
+data$sex.male<- factor(ifelse(data$sex == 1,1,0))
+data$sex.female<- factor(ifelse(data$sex == 2,1,0))
+
+data$White <- factor(ifelse(data$race == 2,1,0))
+data$Black<- factor(ifelse(data$race == 1,1,0))
+data$Hispanic <- factor(ifelse(data$race == 3,1,0))
+data$Other<- factor(ifelse(data$race >= 4,1,0))
+
+data$fibrosis.yes <-factor(ifelse(data$fibrosis_stage != 0, 1,0))
+data$lobular.yes <-factor(ifelse(data$lobular_inflammation != 0, 1,0))
+data$portal.yes <-factor(ifelse(data$portal_inflammation != 0, 1,0))
+data$ballooning.yes <-factor(ifelse(data$ballooning == 1,1,0))
+
+data$NAS_score <- as.numeric(data$NAS_score)
+data$NAS.12 <-factor(ifelse(data$NAS_score < 3, 1,0))
+data$NAS.34 <-factor(ifelse((data$NAS_score>=3 & data$NAS_score<5), 1,0))
+data$NAS.ge5 <-factor(ifelse(data$NAS_score >= 5, 1,0))
+
+row.names <- c(
+  "Age",
+  "&nbsp;-&nbsp; &le;12 yrs", 
+  "&nbsp;-&nbsp; 13-15 yrs",
+  "&nbsp;-&nbsp; &ge;16 yrs",
+  "Male",
+  "Female",
+  "Race", 
+  "&nbsp;-&nbsp; Black", 
+  "&nbsp;-&nbsp; White",
+  "&nbsp;-&nbsp; Hispanic",
+  "&nbsp;-&nbsp; Other", 
+  "Fibrosis, yes/no", 
+  "Lobular Inflam, yes/no",
+  "Portal inflam, yes/no",
+  "Ballooning, yes/no",
+  "NAS_score",
+  "&nbsp;-&nbsp; 1-2", 
+  "&nbsp;-&nbsp; 3-4",
+  "&nbsp;-&nbsp; &ge;5"
+)
+  
+# build a function to output each row
+row.builder <- function(varname) {
+  if(varname == "NULL") return(rep("", 7))
+  tab <- table(data[, varname], data$NASH_inflam)
+  props <- sprintf("%.1f", prop.table(tab, 2)[2, ]*100)
+  stats <- summary(tab)
+  # automatically determine if Fisher test is appropriate
+  if(stats$approx.ok) {
+    chisq <- sprintf("%.2f", stats$statistic)
+    pval <- stats$p.value
+    twotail <- ""
+  } else {
+    chisq <- "&Dagger;"
+    pval <- fisher.test(tab)$p.value
+    twotail <- "&sect;"
+  }
+  star <- ifelse(pval<0.05, "*", "")
+  pval <- ifelse(pval<0.001, "&lt;0.001", 
+                 ifelse(pval<0.01, sprintf("%.3f", stats$p.value), 
+                        sprintf("%.2f", stats$p.value)))
+  pval <- paste(pval, star, twotail, sep = "")
+  c(tab[2, 2], props[2], "", tab[2, 1], props[1], chisq, pval)
+}
+
+vars <- c("NULL", "age.le12", "age.13.15", "age.ge16", "sex.male", "sex.female", "NULL", 
+          "Black", "White", "Hispanic", "Other", "fibrosis.yes", "lobular.yes", "portal.yes", 
+          "ballooning.yes", "NULL", "NAS.12", "NAS.34", "NAS.ge5")
+
+body <- do.call(rbind, lapply(vars, row.builder))
+
+# all but last row
+row.names1 <- sapply(row.names[-length(row.names)], 
+                     function(x) html(x, "td", list(list(style="font: bold"))))
+body1 <- apply(body[-nrow(body), ], 1, 
+               function(x) html(x, "td", list(list(style = "text-align: center"))))
+
+# last row special formatting
+row.names2 <- html(row.names[length(row.names)], "td", 
+                   list(list(style = "font: bold; border-bottom: black solid")))
+body2 <- html(body[nrow(body), ], "td", 
+              list(list(style = "text-align: center; border-bottom: black solid")))
+
+# recombine:
+row.names <- c(row.names1, row.names2)
+body <- c(body1, body2)
+body <- html(paste(row.names, body), "tr")
+all <- paste(header, body, sep = "")
+
+# title:
+cat(html("<b>Table 1a.</b> Inflammation vs. No-Inflammation among Children with NAFLD", "p"), 
+    file = "table1b.html")
+
+# table output
+table <- html(all, "table", list(list(style = "border-collapse:collapse")))
+cat(table, file = "table1b.html", append = TRUE)
+
+# footnotes
+footnotes <- c(
+  "&dagger; &alpha;=0.05. Significant p-values are marked with an asterisk (*).<br/>", 
+  "&Dagger; Fisher's Exact Test<br/>", 
+  "&sect; Two-tailed p-value<br/>")
+cat(html(footnotes, "small"), file = "table1b.html", append = TRUE)
+
+# file was written above but we'll read it back in and display here
+cat(readLines("table1b.html"))
+
+```
+
+## Descriptive Statistics, part 3:
+
+Second we will generate descriptive statistics for the groups of children being compared in the analysis of NAS score < 3 versus 3 or greater among children with NAFLD. Again, here is a simple way of doing this.
+
+```{r}
 library(tableone)
 listVars <- c("age", "sex", "race", "BMI", "ALT", "AST", "fibrosis_stage",
               "lobular_inflammation", "portal_inflammation", "ballooning", "NAS_score")
 catVars <- c("sex","race", "fibrosis_stage", "lobular_inflammation",
               "portal_inflammation", "ballooning", "NAS_score")
 table1 <- CreateTableOne(vars = listVars, data = data, factorVars = catVars, 
-                         strata=c("NASH_NAS"))
+                         strata=c("NAS_01"))
 table1
+```
+
+## Table 1c:
+
+We will take the information from above and input into formatted "Table 1c".
+
+```{r, results="asis"}
+# get n1 and n0;
+data[,'NAS_01'] <- as.factor(data$NAS_01)
+n <- summary(data$NAS_01)
+n0str <- paste0("n=", n["0"])
+n1str <- paste0("n=", n["1"])
+
+# create the header
+# note that &___; are called HTML entities and allow you produce special characters
+header <- list()
+HEADERATTR <- list(NULL, list(colspan = 2), NULL, list(colspan = 2), NULL, NULL)
+header <- c(header, 
+            html(
+              html(
+                # &nbsp; are non-breaking spaces for some padding
+                # in the empty column
+                c("", "NAS Score &ge;3", "&nbsp;&nbsp;&nbsp;", 
+                  "NAS Score &lt;3", "", ""), 
+                "th", 
+                HEADERATTR
+              ), 
+              "tr")
+)
+
+HEADERATTR2 <- mapply(c, 
+                      HEADERATTR, 
+                      list(NULL, list(style = "border-bottom: black solid"), NULL, 
+                           list(style = "border-bottom: black solid"), NULL, NULL
+                      )
+)
+
+header <- c(header, 
+            html(
+              html(
+                c("", n1str, "", n0str, "", ""), 
+                "th", 
+                HEADERATTR2), 
+              "tr")
+)
+header <- c(header, 
+            html(
+              html(
+                c("Variable", "n", "%", "", "n", "%", 
+                  "&chi;<sup>2</sup>", "p &dagger;"), 
+                "th", 
+                list(list(style = "border-bottom: black solid"))), 
+              "tr")
+)
+header <- paste(header, collapse = "")
+
+# make some derived variables
+data$age.le12<- factor(ifelse(data$age <= 12, 1, 0))
+data$age.13.15<- factor(ifelse(((data$age >= 13) & (data$age <= 15)), 1, 0))
+data$age.ge16<- factor(ifelse(data$age >= 16, 1, 0))
+
+data$sex.male<- factor(ifelse(data$sex == 1,1,0))
+data$sex.female<- factor(ifelse(data$sex == 2,1,0))
+
+data$White <- factor(ifelse(data$race == 2,1,0))
+data$Black<- factor(ifelse(data$race == 1,1,0))
+data$Hispanic <- factor(ifelse(data$race == 3,1,0))
+data$Other<- factor(ifelse(data$race >= 4,1,0))
+
+data$fibrosis.yes <-factor(ifelse(data$fibrosis_stage != 0, 1,0))
+data$lobular.yes <-factor(ifelse(data$lobular_inflammation != 0, 1,0))
+data$portal.yes <-factor(ifelse(data$portal_inflammation != 0, 1,0))
+data$ballooning.yes <-factor(ifelse(data$ballooning == 1,1,0))
+
+data$NAS_score <- as.numeric(data$NAS_score)
+data$NAS.12 <-factor(ifelse(data$NAS_score < 3, 1,0))
+data$NAS.34 <-factor(ifelse((data$NAS_score>=3 & data$NAS_score<5), 1,0))
+data$NAS.ge5 <-factor(ifelse(data$NAS_score >= 5, 1,0))
+
+row.names <- c(
+  "Age",
+  "&nbsp;-&nbsp; &le;12 yrs", 
+  "&nbsp;-&nbsp; 13-15 yrs",
+  "&nbsp;-&nbsp; &ge;16 yrs",
+  "Male",
+  "Female",
+  "Race", 
+  "&nbsp;-&nbsp; Black", 
+  "&nbsp;-&nbsp; White",
+  "&nbsp;-&nbsp; Hispanic",
+  "&nbsp;-&nbsp; Other", 
+  "Fibrosis, yes/no", 
+  "Lobular Inflam, yes/no",
+  "Portal inflam, yes/no",
+  "Ballooning, yes/no",
+  "NAS_score",
+  "&nbsp;-&nbsp; 1-2", 
+  "&nbsp;-&nbsp; 3-4",
+  "&nbsp;-&nbsp; &ge;5"
+)
+  
+# build a function to output each row
+row.builder <- function(varname) {
+  if(varname == "NULL") return(rep("", 7))
+  tab <- table(data[, varname], data$NAS_01)
+  props <- sprintf("%.1f", prop.table(tab, 2)[2, ]*100)
+  stats <- summary(tab)
+  # automatically determine if Fisher test is appropriate
+  if(stats$approx.ok) {
+    chisq <- sprintf("%.2f", stats$statistic)
+    pval <- stats$p.value
+    twotail <- ""
+  } else {
+    chisq <- "&Dagger;"
+    pval <- fisher.test(tab)$p.value
+    twotail <- "&sect;"
+  }
+  star <- ifelse(pval<0.05, "*", "")
+  pval <- ifelse(pval<0.001, "&lt;0.001", 
+                 ifelse(pval<0.01, sprintf("%.3f", stats$p.value), 
+                        sprintf("%.2f", stats$p.value)))
+  pval <- paste(pval, star, twotail, sep = "")
+  c(tab[2, 2], props[2], "", tab[2, 1], props[1], chisq, pval)
+}
+
+vars <- c("NULL", "age.le12", "age.13.15", "age.ge16", "sex.male", "sex.female", "NULL", 
+          "Black", "White", "Hispanic", "Other", "fibrosis.yes", "lobular.yes", "portal.yes", 
+          "ballooning.yes", "NULL", "NAS.12", "NAS.34", "NAS.ge5")
+
+body <- do.call(rbind, lapply(vars, row.builder))
+
+# all but last row
+row.names1 <- sapply(row.names[-length(row.names)], 
+                     function(x) html(x, "td", list(list(style="font: bold"))))
+body1 <- apply(body[-nrow(body), ], 1, 
+               function(x) html(x, "td", list(list(style = "text-align: center"))))
+
+# last row special formatting
+row.names2 <- html(row.names[length(row.names)], "td", 
+                   list(list(style = "font: bold; border-bottom: black solid")))
+body2 <- html(body[nrow(body), ], "td", 
+              list(list(style = "text-align: center; border-bottom: black solid")))
+
+# recombine:
+row.names <- c(row.names1, row.names2)
+body <- c(body1, body2)
+body <- html(paste(row.names, body), "tr")
+all <- paste(header, body, sep = "")
+
+# title:
+cat(html("<b>Table 1b.</b> NAS Score &lt;3 vs. NAS Score &ge;3 among Children with NAFLD", "p"), 
+    file = "table1c.html")
+
+# table output
+table <- html(all, "table", list(list(style = "border-collapse:collapse")))
+cat(table, file = "table1c.html", append = TRUE)
+
+# footnotes
+footnotes <- c(
+  "&dagger; &alpha;=0.05. Significant p-values are marked with an asterisk (*).<br/>", 
+  "&Dagger; Fisher's Exact Test<br/>", 
+  "&sect; Two-tailed p-value<br/>")
+cat(html(footnotes, "small"), file = "table1c.html", append = TRUE)
+
+# file was written above but we'll read it back in and display here
+cat(readLines("table1c.html"))
+```
