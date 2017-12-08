@@ -1,7 +1,7 @@
 ---
 title: "CHEAR Metabolomics Dataset - Phenotype Information"
 author: "Catherine Cioffi"
-date: "November 22, 2017"
+date: "November 30, 2017"
 output: html_document
 ---
 
@@ -95,7 +95,7 @@ summary(as.factor(data_final$NAS_01))
 
 ## Print final, cleaned dataset:
 
-Below we will print a selected set of variables from the new, cleaned dataset. We will also write this dataset to our working directory for future statistical analyses.
+Below we will print a selected set of variables from the new, cleaned dataset. We will also write this dataset to our working directory for future statistical analyses. 
 
 ```{r, echo=TRUE}
 data_final_stripped <- data_final[, c("CHEAR_ID", "NAFLD_01", "NASH_01", "Inflam_01", "NAS_01", "T2DM", "IGT", "IFG", 'age', 'sex', 'race', 'BMI', 'BMIZ', 'BMIPCT', 'ALT', 'AST', 'Triglyc', 'HDL', 'LDL', 'Total_chol', 'fibrosis_stage', 'lobular_inflammation', 'portal_inflammation', 'ballooning', 'NAS_score')]
@@ -109,5 +109,26 @@ data_final_stripped %>%
   scroll_box(width = "750px", height = "750px")
 
 write.csv(data_final, file = "phenotype_data.csv")
+
+```
+
+## Overview of data available by study:
+
+The CHEAR dataset is a compilation of several different, separate studies. Below we will create a table indicating which data is available for each study within this larger dataset.
+
+```{r, echo=TRUE}
+
+table <- data.frame(row.names=c("Liver Biopsy", "Sweet Bev", "Yale Samples", "HepaFat"))
+table$Demographics <- NA
+table$MRI_Hepatic_Fat <- NA
+table$MRI_VAT_SAT <- NA
+table$Liver_Biopsy <- NA
+table$OGTT <- NA
+
+table[1,] <- c("Yes", "No", "No", "Yes", "No")
+table[2,] <- c("Yes", "No", "No", "No", "Yes")
+table[3,] <- c("Yes", "Yes", "Yes", "No", "Yes")
+table[4,] <- c("Yes", "Yes", "No", "Yes", "No")
+table
 
 ```
