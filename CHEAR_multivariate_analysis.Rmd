@@ -8,12 +8,19 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
 ## MULTIVARIATE ANALYSIS IN R-PACKAGE xms PANDA:
 
 The following R-code reads in the SAME feature table and the class label file as in univariate analysis, and designates the output location. Again, the metabolomics data being run is the HILIC positive data. In the code below, xmsPANDA performs partial least square regression-discriminatory analysis, with fold change crtiera of 2 and VIP threshold criteria of 2. Upon completion of the code, we have asked R to print the VIP score for each m/z  in the "best set of discriminatory metabolites".
 
 
-```{r}
+```{r, eval=FALSE}
+#switch to eval=TRUE to run the code...
+
+feature_table_file<-"/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_Panel/HILIC/R_output_data/featuretable.txt"
+class_labels_file<-"/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_panel/HILIC/R_output_data/classlabels.txt"
+outloc_univariate<-"/Users/cecioff/Desktop/metabolomics/_CHEAR/NASH_panel/HILIC/univariate"
+
 #pls regression; no RSD filtering; 50% per group missing.
 results_multivariate <- diffexp(Xmat = NA, Ymat = NA, feature_table_file=feature_table_file, 
         parentoutput_dir=outloc_multivariate, class_labels_file=class_labels_file, 
