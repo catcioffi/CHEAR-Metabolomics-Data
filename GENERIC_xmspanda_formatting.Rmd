@@ -1,0 +1,172 @@
+---
+title: "GENERIC_data_cleaning_xmsPanda"
+author: "Catherine Cioffi"
+date: "November 30, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## How to reformat data for xms Panda:
+
+These are generic steps for formatting your data for xmsPanda.
+
+First, read in the data files:
+
+```{r}
+
+#Read in your raw feature table from apLCMS and xmsAnalyzer:
+featuretable <- read.delim("C://Users//cecioff//Desktop//metabolomics//_CHEAR//HILICpos_rawdata//ComBat_mzcalibrated_untargeted_mediansummarized_featuretable.txt",  header=TRUE)
+
+#remove front columns:
+featuretable[3:10] <- NULL
+
+#Read in sequence map file from Jones lab:
+samplesfile <- ("C://Users//cecioff//Desktop//metabolomics//_CHEAR//HILICpos_rawdata//miriam_chear_sequence_hilicpos.txt")
+
+
+#read in class labels file from your own data. Must include at least sample ID and class label columns.
+class_labels <- read.delim("C://Users//cecioff//Desktop//metabolomics//_CHEAR//NASH_panel//HILIC//classlabels_NASH_v2.txt", stringsAsFactors = FALSE)
+
+```
+
+## Step 1 - Filter the sequence map file.
+
+This step will remove all NIST and q-standards. 
+
+```{r}
+
+is_sample <- function(field){
+  if (grepl("nist|q3|wash",field,fixed=TRUE)){
+    return(FALSE)
+  } else{
+    return(TRUE)
+  }
+}
+
+sampledata <- read.table(samplesfile, header=TRUE)
+filtered_file <- data.frame("File_Name"=NA, "Sample"=NA, "Batch"=NA)
+
+for (i in 1:nrow(sampledata)){
+  if (is_sample(sampledata[i,2])){
+    filtered_file <- rbind(filtered_file, sampledata[i,])
+  }
+}
+
+```
+
+# Step 2 - Reformat and select the sample ID's for your analysis:
+
+This step will reformat the "Sample" ID's to remove all unnecessary characters and spaces. It will then match the "Sample" ID's in the sequence map file to those in the class label file. Any non-matches will be removed.
+
+```{r}
+#Next, reformatting sample id's if needed. In this dataset, there was an unnecessary Box number for some sample ID's. We will remove this.
+for (i in 1:nrow(filtered_file)){
+  if (grepl("BOX", filtered_file[i,2], fixed=TRUE)){
+    filtered_file[i,2]<-substr(filtered_file[i,2], 1, 14)
+    } else {
+      next
+    }
+}
+
+#add X before all sample names because some ID's started with a number, which R doesn't like:
+for (i in 1:nrow(filtered_file)){
+  filtered_file[i,2] <- paste("x", as.character(filtered_file[i,2]), sep="")
+}
+
+#replacing all dashes and underscores with period;
+filtered_file$Sample <-gsub("-",".",filtered_file$Sample)
+filtered_file$Sample <-gsub("_",".",filtered_file$Sample)
+filtered_file$Sample <-gsub(" ",".",filtered_file$Sample)
+
+filtered_file <- filtered_file[-1,]
+
+#repeat these steps on the class label file so the Sample ID's match:
+for (i in 1:nrow(class_labels)){
+  class_labels[i,1] <- paste("x", as.character(class_labels[i,1]), sep="")
+}
+
+class_labels$orig_ID_plasma <-gsub("-",".",class_labels$orig_ID_plasma)
+class_labels$orig_ID_plasma <-gsub("_",".",class_labels$orig_ID_plasma)
+class_labels$orig_ID_plasma <-gsub(" ",".",class_labels$orig_ID_plasma)
+
+#Finally, match the sample Id's and remove the rows we don't want.
+#create vector of ID's that we WANT:
+subject_id_vector <- class_labels$orig_ID_plasma
+
+#remove rows that do not have a match.
+new_sequence_file <- subset(filtered_file, (Sample %in% subject_id_vector))
+
+#remove the triplicate rows in sequence map file.
+final_sequence_file <- new_sequence_file[seq(from=1,to=nrow(new_sequence_file),by=3),]
+
+```
+
+# Step 3 - Remove columns in featuretable:
+
+Now we will remove the columns in the feature table that are not needed for the analysis.
+
+```{r}
+
+#create vector of ID's that we WANT:
+jones_id_vector <- final_sequence_file$File_Name
+all_id_vector <- c("mz", "time", jones_id_vector)
+
+#remove columns from feature table that do not match:
+columns.keep<- names(featuretable) %in% all_id_vector
+featuretable2 <- featuretable[,columns.keep]
+
+##Substitute Jones id with our id.
+new_cols<-c()
+old_cols<-colnames(featuretable2)
+
+for (i in 3:length(old_cols)){
+  index <- match(old_cols[i], final_sequence_file$File_Name)
+  new_cols <- c(new_cols, final_sequence_file[index, "Sample"])
+}
+
+colnames(featuretable2) <- c("mz", "time", new_cols)
+
+#rename for easy understanding.
+featuretable_final <- featuretable2
+```
+
+# Step 4 - Re-write  class labels file so the order matches the featuretable:
+
+xmsPanda requires that the order in the feature table matches the order in the class labels file. Now we will re-write the class labels file so the order matches the feature table.
+
+```{r}
+
+new_class_labels <- data.frame("Sampleid"=colnames(featuretable_final), "Classlabel"=NA, "Sex"=NA, "Race"=NA)
+
+#delete mz and time:
+new_class_labels <- new_class_labels[3:nrow(new_class_labels), 1:4]
+
+#lookup values for classlabel, age, and sex (or whatever other covariates you are using) in original class label file:
+new_class_labels$Classlabel <- class_labels$classlabel[match(new_class_labels$Sampleid, class_labels$orig_ID_plasma)]
+new_class_labels$Sex <- class_labels$sex[match(new_class_labels$Sampleid, class_labels$orig_ID_plasma)]
+new_class_labels$Race <- class_labels$race[match(new_class_labels$Sampleid, class_labels$orig_ID_plasma)]
+
+#check that it worked:
+new_class_labels
+
+```
+
+#Final step - write the files to computer.
+
+Now we write the new feature table and class labels file to your hard-drive. Change the paths below based on where you want them to go. This is where xmsPanda will also pull them from.
+
+```{r}
+
+write.table(new_class_labels, 
+            "C://Users//cecioff//Desktop//metabolomics//_CHEAR//NASH_panel//HILIC//R_output_data//classlabels.txt",
+            sep="\t", row.names=FALSE)
+
+
+write.table(featuretable_final, 
+            "C://Users//cecioff//Desktop//metabolomics//_CHEAR//NASH_panel//HILIC//R_output_data//featuretable.txt",
+            sep="\t", row.names=FALSE)
+
+```
